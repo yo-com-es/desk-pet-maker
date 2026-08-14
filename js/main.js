@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
 import { GaitEngine, ROLE_GROUPS, ROLE_LABELS, ALL_ROLES } from "./gait.js";
 import { preparePaintableModel, PaintTool } from "./paint.js";
 import {
@@ -13,6 +14,29 @@ import { HairCanvas } from "./hairpaint.js";
 import { autoMapBones } from "./autorig.js";
 import { ColorWheel } from "./colorwheel.js";
 import { setupBrushGallery } from "./brushgallery.js";
+
+// Acelera CUALQUIER raycast contra CUALQUIER malla (pintar, arrastrar
+// personajes, elegir dónde pegar el pelo) usando un árbol de límites (BVH)
+// en vez de revisar triángulo por triángulo. Sin esto, un modelo con mucho
+// detalle (cientos de miles de vértices) hace que pintar se sienta trabado,
+// porque cada movimiento del mouse dispara una revisión lineal de toda la
+// malla. El árbol se construye una sola vez por modelo, al cargarlo (ver
+// buildRaycastAcceleration más abajo) — después, cada raycast es rapidísimo
+// sin importar qué tan pesado sea el modelo.
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
+function buildRaycastAcceleration(root) {
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry || o.geometry.boundsTree) return;
+    try {
+      o.geometry.computeBoundsTree();
+    } catch (e) {
+      console.warn("No se pudo acelerar el raycast de", o.name || o.uuid, e);
+    }
+  });
+}
 
 // ---------- Escena base ----------
 const canvas = document.getElementById("glcanvas");
@@ -177,6 +201,7 @@ async function loadModelIntoSlot(slotName, url) {
   slot.gait = null;
   slot.mounted = false;
   slot.paintables = preparePaintableModel(root, renderer);
+  buildRaycastAcceleration(root);
 
   applyScale(slotName, parseFloat(document.getElementById("scale" + slotName).value));
   positionSideBySide();
@@ -1191,48 +1216,87 @@ function bakeClipForSlot(slotName) {
 
 function downloadGLB(target, clips, filename) {
   const exporter = new GLTFExporter();
-  document.getElementById("exportHint").textContent = "exportando…";
-  exporter.parse(
-    target,
-    (result) => {
-      const blob = new Blob([result], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      document.getElementById("exportHint").textContent = "✅ exportado: " + filename;
-      setStatus("exportado: " + filename);
-    },
-    (err) => {
-      console.error(err);
-      document.getElementById("exportHint").textContent = "❌ error exportando: " + err.message;
-    },
-    { binary: true, animations: clips.filter(Boolean) }
-  );
+  const hint = document.getElementById("exportHint");
+  hint.textContent = "exportando…";
+  setExportButtonsEnabled(false);
+  try {
+    exporter.parse(
+      target,
+      (result) => {
+        try {
+          const blob = new Blob([result], { type: "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          hint.textContent = "✅ exportado: " + filename;
+          setStatus("exportado: " + filename);
+        } catch (err) {
+          console.error("Error al generar la descarga:", err);
+          hint.textContent = "❌ error exportando: " + (err && err.message ? err.message : String(err));
+        } finally {
+          setExportButtonsEnabled(true);
+        }
+      },
+      (err) => {
+        console.error("Error de GLTFExporter:", err);
+        hint.textContent = "❌ error exportando: " + (err && err.message ? err.message : String(err));
+        setExportButtonsEnabled(true);
+      },
+      { binary: true, animations: clips.filter(Boolean) }
+    );
+  } catch (err) {
+    // exporter.parse() puede tronar de forma síncrona (antes de llamar a
+    // ninguno de los dos callbacks) si algo en el modelo no es exportable
+    // — sin este try/catch, eso quedaba solo en la consola y el botón
+    // parecía "no hacer nada".
+    console.error("Error síncrono exportando:", err);
+    hint.textContent = "❌ error exportando: " + (err && err.message ? err.message : String(err));
+    setExportButtonsEnabled(true);
+  }
+}
+
+function setExportButtonsEnabled(enabled) {
+  ["exportABtn", "exportBBtn", "exportBothBtn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = !enabled;
+  });
 }
 
 function exportSlot(slotName) {
   const slot = slots[slotName];
   if (!slot.root) { document.getElementById("exportHint").textContent = "no hay nada cargado en " + slotName; return; }
-  const clip = bakeClipForSlot(slotName);
-  const name = (slot.displayName || "modelo").replace(/\.[^.]+$/, "") + "_" + (slot.animState || "pose") + ".glb";
-  downloadGLB(slot.group, [clip], name);
+  try {
+    const clip = bakeClipForSlot(slotName);
+    const name = (slot.displayName || "modelo").replace(/\.[^.]+$/, "") + "_" + (slot.animState || "pose") + ".glb";
+    downloadGLB(slot.group, [clip], name);
+  } catch (err) {
+    console.error("Error preparando la animación para exportar:", err);
+    document.getElementById("exportHint").textContent = "❌ error preparando la exportación: " + (err && err.message ? err.message : String(err));
+  }
 }
 
 document.getElementById("exportABtn").addEventListener("click", () => exportSlot("A"));
 document.getElementById("exportBBtn").addEventListener("click", () => exportSlot("B"));
 document.getElementById("exportBothBtn").addEventListener("click", () => {
   if (!slots.A.root && !slots.B.root) { document.getElementById("exportHint").textContent = "no hay nada cargado"; return; }
-  const clipA = bakeClipForSlot("A");
-  const clipB = bakeClipForSlot("B");
-  let target;
-  if (slots.B.mounted && slots.A.group) {
-    target = slots.A.group; // B ya vive adentro de la jerarquía de A (montado)
-  } else {
-    target = [slots.A.group, slots.B.group].filter(Boolean);
+  try {
+    const clipA = bakeClipForSlot("A");
+    const clipB = bakeClipForSlot("B");
+    let target;
+    if (slots.B.mounted && slots.A.group) {
+      target = slots.A.group; // B ya vive adentro de la jerarquía de A (montado)
+    } else {
+      target = [slots.A.group, slots.B.group].filter(Boolean);
+    }
+    downloadGLB(target, [clipA, clipB], "criadero_escena.glb");
+  } catch (err) {
+    console.error("Error preparando la animación para exportar:", err);
+    document.getElementById("exportHint").textContent = "❌ error preparando la exportación: " + (err && err.message ? err.message : String(err));
   }
-  downloadGLB(target, [clipA, clipB], "criadero_escena.glb");
 });
 
 

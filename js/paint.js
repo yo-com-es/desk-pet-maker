@@ -179,6 +179,8 @@ export class PaintTool {
   disable() {
     if (!this.active) return;
     this.active = false;
+    this.painting = false;
+    this._loopRunning = false;
     this.dom.removeEventListener("pointerdown", this._onDown);
     window.removeEventListener("pointermove", this._onMove);
     window.removeEventListener("pointerup", this._onUp);
@@ -197,20 +199,41 @@ export class PaintTool {
     const hit = this._hit(e);
     if (!hit || !hit.uv) return;
     this.painting = true;
+    this._lastEvent = e;
     if (this.onStrokeStateChange) this.onStrokeStateChange(true);
     this._pushUndo(hit.object);
     this._paintAt(hit);
+    if (!this._loopRunning) {
+      this._loopRunning = true;
+      requestAnimationFrame(this._loop.bind(this));
+    }
+  }
+
+  // Un solo raycast + pintado por cuadro renderizado, sin importar cuántos
+  // eventos "pointermove" dispare el navegador entre medio (puede ser
+  // decenas por segundo con un mouse/tablet de alta frecuencia). Antes,
+  // cada pointermove hacía su propio raycast contra el modelo Y su propia
+  // subida completa de la textura a la GPU (needsUpdate=true) — con un
+  // modelo detallado eso se sentía muy trabado. Ahora, como mucho, un
+  // raycast + una subida de textura por frame (~60/seg).
+  _loop() {
+    if (!this.painting) { this._loopRunning = false; return; }
+    if (this._lastEvent) {
+      const hit = this._hit(this._lastEvent);
+      if (hit && hit.uv) this._paintAt(hit);
+    }
+    requestAnimationFrame(this._loop.bind(this));
   }
 
   _onMove(e) {
     if (!this.painting) return;
-    const hit = this._hit(e);
-    if (hit && hit.uv) this._paintAt(hit);
+    this._lastEvent = e; // solo guarda la posición; el trabajo pesado va en _loop()
   }
 
   _onUp() {
     if (!this.painting) return;
     this.painting = false;
+    this._lastEvent = null;
     if (this.onStrokeStateChange) this.onStrokeStateChange(false);
   }
 
