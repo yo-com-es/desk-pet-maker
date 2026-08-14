@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Criadero — Taller de mascotas 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand-mark">⛺</span>
+      <div>
+        <h1>Criadero</h1>
+        <p>taller de mascotas 3D — animar, montar, pintar</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="statusText" class="status">listo</span>
+    </div>
+  </header>
+
+  <div id="layout">
+
+    <!-- LEFT PANEL: slots + load + scale + mount -->
+    <aside id="leftPanel" class="panel">
+
+      <section class="block">
+        <h2>Personajes en escena</h2>
+        <div class="slot" data-slot="A">
+          <div class="slot-head">
+            <span class="slot-label">Base A</span>
+            <select id="modelSelectA">
+              <option value="">— vacío —</option>
+              <option value="__custom__">Cargar mi archivo .glb…</option>
+            </select>
+          </div>
+          <input type="file" id="fileInputA" accept=".glb,.gltf" style="display:none">
+          <div class="dropzone" id="dropZoneA">Arrastra aquí tu archivo .glb<br><span class="hint small" style="margin:2px 0 0;">o toca para elegir</span></div>
+          <div class="slot-controls" id="controlsA">
+            <label>Escala <input type="range" id="scaleA" min="0.05" max="4" step="0.01" value="1"><span id="scaleAVal">1.00</span></label>
+          </div>
+        </div>
+
+        <div class="slot" data-slot="B">
+          <div class="slot-head">
+            <span class="slot-label">Base B</span>
+            <select id="modelSelectB">
+              <option value="">— vacío —</option>
+              <option value="__custom__">Cargar mi archivo .glb…</option>
+            </select>
+          </div>
+          <input type="file" id="fileInputB" accept=".glb,.gltf" style="display:none">
+          <div class="dropzone" id="dropZoneB">Arrastra aquí tu archivo .glb<br><span class="hint small" style="margin:2px 0 0;">o toca para elegir</span></div>
+          <div class="slot-controls" id="controlsB">
+            <label>Escala <input type="range" id="scaleB" min="0.05" max="4" step="0.01" value="1"><span id="scaleBVal">1.00</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Tamaño relativo</h2>
+        <p class="hint">Ajusta B para que quede a escala real frente a A (por ejemplo, que el jinete no sea más grande que el dragón).</p>
+        <label>B es este % de la altura de A
+          <input type="range" id="ratioSlider" min="5" max="150" step="1" value="45">
+          <span id="ratioVal">45%</span>
+        </label>
+        <button id="autoScaleBtn" class="btn">Autoescalar B según A</button>
+      </section>
+
+      <section class="block">
+        <h2>Montar B sobre A</h2>
+        <p class="hint">Ej: un jinete humanoide sobre el lomo del dragón.</p>
+        <label>Hueso de A donde se monta
+          <select id="mountBoneSelect"><option value="">— elige base A primero —</option></select>
+        </label>
+        <div class="offset-grid">
+          <label>X <input type="range" id="mountX" min="-2" max="2" step="0.01" value="0"></label>
+          <label>Y <input type="range" id="mountY" min="-3" max="3" step="0.01" value="0"><span id="mountYVal">0.00</span></label>
+          <label>Z <input type="range" id="mountZ" min="-2" max="2" step="0.01" value="0"></label>
+          <label>Giro Y° <input type="range" id="mountRotY" min="-180" max="180" step="1" value="0"></label>
+        </div>
+        <button id="mountBtn" class="btn">Montar B en A</button>
+        <button id="snapToSurfaceBtn" class="btn btn-ghost">Pegar a la superficie</button>
+        <button id="unmountBtn" class="btn btn-ghost">Desmontar</button>
+        <label>Hundido <input type="range" id="sinkDepth" min="0" max="1" step="0.005" value="0.03"><span id="sinkDepthVal">0.03</span></label>
+        <p class="hint small" style="margin:2px 0 8px;">Cuánto se mete B dentro de A al pegar a la superficie — súbelo si sigue viéndose un hueco/valle donde se tocan los dos cuerpos.</p>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+          <input type="checkbox" id="seatedCheck" checked> Sentado (a caballo), no solo parado encima
+        </label>
+      </section>
+
+      <section class="block">
+        <h2>Interacción entre personajes</h2>
+        <p class="hint">Uno acaricia, el otro reacciona contento (cola, cabeza).</p>
+        <label>Quién acaricia <select id="petActorSelect"><option value="">—</option></select></label>
+        <label>Quién es acariciado <select id="petTargetSelect"><option value="">—</option></select></label>
+        <button id="petSwapBtn" class="btn btn-ghost">🔁 Invertir quién acaricia a quién</button>
+        <button id="petBtn" class="btn">🤚 Acariciar</button>
+      </section>
+
+      <section class="block">
+        <h2>Exportar</h2>
+        <p class="hint">Hornea la animación actual (la que esté sonando ahora) dentro de un .glb nuevo, junto
+          con el pelo pintado y la piel pintada — el archivo queda listo para que cualquiera lo abra en
+          Blender, Unity, Godot, o donde sea, sin necesitar este programa.</p>
+        <button id="exportABtn" class="btn">Exportar Base A</button>
+        <button id="exportBBtn" class="btn">Exportar Base B</button>
+        <button id="exportBothBtn" class="btn btn-primary">Exportar los dos juntos</button>
+        <p class="hint small" id="exportHint"></p>
+      </section>
+
+    </aside>
+
+    <!-- CENTER: viewport -->
+    <main id="viewport">
+      <canvas id="glcanvas"></canvas>
+      <div id="viewportOverlay">
+        <div class="anim-bar">
+          <span class="anim-target-label">Animando:</span>
+          <select id="animTargetSelect"><option value="">—</option></select>
+          <button class="animbtn" data-state="idle">Reposo</button>
+          <button class="animbtn active" data-state="walk">Caminar</button>
+          <button class="animbtn" data-state="run">Correr</button>
+          <button class="animbtn" data-state="dance">Bailar</button>
+          <input type="range" id="speedSlider" min="0.2" max="2.5" step="0.05" value="1" title="velocidad">
+        </div>
+      </div>
+      <div id="paintCursorHint" class="hidden">🖌️ Click y arrastra sobre el modelo para pintar</div>
+      <div id="hairPickCursorHint" class="hidden">🎯 Haz clic en el modelo para pegar el pelo ahí</div>
+      <div id="dragHint">✋ Arrastra a un personaje para acercarlo a otro</div>
+    </main>
+
+    <!-- RIGHT PANEL: bone mapping + paint -->
+    <aside id="rightPanel" class="panel">
+
+      <div class="tabs">
+        <button class="tab active" data-tab="rig">Huesos</button>
+        <button class="tab" data-tab="paint">Pintar</button>
+        <button class="tab" data-tab="hair">Pelo</button>
+      </div>
+
+      <section class="tabpage" id="tab-rig">
+        <h2>Mapeo de huesos</h2>
+        <p class="hint">Asigna qué hueso hace qué. Así el ciclo de caminar/correr funciona con cualquier rig, tenga nombres claros o no.</p>
+        <label>Personaje a mapear
+          <select id="riggingTargetSelect"><option value="">—</option></select>
+        </label>
+        <div id="boneMapList" class="bone-map-list"></div>
+        <button id="autoMapBtn" class="btn btn-primary">🪄 Auto-mapear huesos</button>
+        <button id="saveMappingBtn" class="btn">Guardar mapeo (este modelo)</button>
+        <p class="hint small" id="mappingSavedHint"></p>
+      </section>
+
+      <section class="tabpage hidden" id="tab-paint">
+        <h2>Pintar como lienzo</h2>
+        <p class="hint">Estilo Mecca Chameleon / Mii: el cuerpo es un lienzo en blanco. No se toca el modelo base ni el rig, solo la textura.</p>
+        <label>Personaje a pintar
+          <select id="paintTargetSelect"><option value="">—</option></select>
+        </label>
+        <div id="paintColorWheel"></div>
+        <label>Grosor <input type="range" id="brushSize" min="2" max="60" step="1" value="16"><span id="brushSizeVal">16</span></label>
+        <div class="palette" id="quickPalette"></div>
+        <p class="hint small">Pinceles — el primero (●) es el círculo normal; sube el tuyo con el botón +.</p>
+        <div class="brush-stamp-row" id="paintBrushRow"></div>
+        <input type="file" id="paintBrushFile" accept="image/*" style="display:none">
+        <div class="paint-actions">
+          <button id="eraseBtn" class="btn btn-ghost">Borrador</button>
+          <button id="undoPaintBtn" class="btn btn-ghost">Deshacer</button>
+          <button id="resetPaintBtn" class="btn btn-ghost">Restablecer piel</button>
+        </div>
+        <button id="togglePaintBtn" class="btn btn-primary">Activar modo pintura</button>
+      </section>
+
+      <section class="tabpage hidden" id="tab-hair">
+        <h2>Pelo pintado a mano</h2>
+        <p class="hint">Igual que en el video: dibujas el pelo sobre un lienzo transparente, lo no pintado se
+          recorta solo, y el resultado queda pegado al frente del modelo — usando la forma del modelo mismo,
+          NO un hueso, así no importa cómo esté armado el esqueleto de cada personaje.</p>
+        <label>Personaje
+          <select id="hairTargetSelect"><option value="">—</option></select>
+        </label>
+        <label>Dónde va
+          <select id="hairAnchorMode">
+            <option value="frente">Frente de la cara (humanoides)</option>
+            <option value="cuernos">Arriba/atrás de la cabeza (cuernos de dragón, etc.)</option>
+            <option value="custom">Clic en el modelo (más preciso)</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+          <input type="checkbox" id="hairFlipFront"> El modelo quedó exportado al revés (voltear frente/atrás)
+        </label>
+        <button id="hairPickBtn" class="btn btn-ghost">🎯 Elegir el punto en el modelo</button>
+        <p class="hint small" id="hairPickHint">Dale al botón y luego haz clic directo sobre el modelo, en el
+          punto exacto donde quieres que quede el pelo — queda pegado ahí mismo, siguiendo la superficie, como
+          una calcomanía.</p>
+
+        <div class="hair-canvas-wrap">
+          <canvas id="hairPaintCanvas"></canvas>
+        </div>
+
+        <div id="hairColorWheel"></div>
+        <label>Grosor <input type="range" id="hairBrushSize" min="1" max="30" step="1" value="5"><span id="hairBrushSizeVal">5</span></label>
+        <div class="palette" id="hairPalette"></div>
+        <p class="hint small">Pinceles — el primero (●) es el círculo normal; sube el tuyo con el botón +. (No lee archivos .sut nativos de SAI, pero si exportas/capturas tu pincel como imagen PNG funciona igual.)</p>
+        <div class="brush-stamp-row" id="hairBrushRow"></div>
+        <input type="file" id="hairBrushFile" accept="image/*" style="display:none">
+
+        <div class="paint-actions">
+          <button id="hairBrushBtn" class="btn btn-ghost btn-primary" data-tool="brush">🖊️ Pincel</button>
+          <button id="hairBucketBtn" class="btn btn-ghost" data-tool="bucket">🪣 Cubeta</button>
+          <button id="hairEraserBtn" class="btn btn-ghost" data-tool="eraser">🧽 Borrador</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+          <input type="checkbox" id="hairLockAlpha"> Candado de transparencia (colorea solo sobre lo ya pintado, sin salirse del contorno)
+        </label>
+        <div class="paint-actions">
+          <button id="hairUndoBtn" class="btn btn-ghost">Deshacer</button>
+          <button id="hairClearBtn" class="btn btn-ghost">Vaciar lienzo</button>
+        </div>
+
+        <h2 style="margin-top:14px;">Ajuste fino de posición</h2>
+        <div class="offset-grid">
+          <label>Pos X <input type="range" id="hairX" min="-0.15" max="0.15" step="0.002" value="0"></label>
+          <label>Pos Y <input type="range" id="hairY" min="-0.1" max="0.1" step="0.002" value="0"></label>
+          <label>Pos Z (frente) <input type="range" id="hairZ" min="-0.1" max="0.1" step="0.002" value="0"></label>
+          <label>Rot Y <input type="range" id="hairRotY" min="-180" max="180" step="1" value="0"></label>
+          <label>Rot X <input type="range" id="hairRotX" min="-90" max="90" step="1" value="0"></label>
+          <label>Tamaño <input type="range" id="hairScale" min="0.3" max="2.5" step="0.02" value="1"></label>
+        </div>
+        <button id="applyHairBtn" class="btn btn-primary">Poner / actualizar pelo</button>
+        <button id="removeHairBtn" class="btn btn-ghost">Quitar pelo</button>
+        <p class="hint small">Pinta primero, luego dale a "Poner/actualizar pelo" para pegarlo — puedes seguir
+          pintando y volver a darle al botón para refrescarlo. El punto de partida ya lo calcula el programa
+          según la caja del modelo y el "Dónde va" que elijas; los sliders de aquí abajo son solo para afinar.</p>
+      </section>
+
+    </aside>
+
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./js/libs/three/build/three.module.js",
+    "three/addons/": "./js/libs/three/jsm/"
+  }
+}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
