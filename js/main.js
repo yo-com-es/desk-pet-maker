@@ -829,6 +829,7 @@ document.getElementById("resetPaintBtn").addEventListener("click", () => {
 const togglePaintBtn = document.getElementById("togglePaintBtn");
 const paintHint = document.getElementById("paintCursorHint");
 let paintModeOn = false;
+let paintFrozenSlot = null;
 togglePaintBtn.addEventListener("click", () => {
   paintModeOn = !paintModeOn;
   if (paintModeOn) {
@@ -839,11 +840,20 @@ togglePaintBtn.addEventListener("click", () => {
     paintHint.classList.remove("hidden");
     togglePaintBtn.textContent = "Desactivar modo pintura";
     togglePaintBtn.classList.add("btn-primary");
+    // Congela al personaje en su pose de reposo mientras se pinta: si sigue
+    // animando (aunque sea el balanceo del estado "Reposo"), lo que ves en
+    // pantalla deja de coincidir con la pose real contra la que se prueba
+    // el clic, y el pincel pinta donde NO estás apuntando.
+    if (slots[s].gait) {
+      slots[s].gait.resetToRest();
+      paintFrozenSlot = s;
+    }
   } else {
     paintTool.disable();
     paintHint.classList.add("hidden");
     togglePaintBtn.textContent = "Activar modo pintura";
     togglePaintBtn.classList.remove("btn-primary");
+    paintFrozenSlot = null;
   }
 });
 
@@ -1303,8 +1313,8 @@ document.getElementById("exportBothBtn").addEventListener("click", () => {
 function animate() {
   requestAnimationFrame(animate);
   const t = clock.getElapsedTime();
-  if (slots.A.gait) slots.A.gait.update(t);
-  if (slots.B.gait) slots.B.gait.update(t);
+  if (slots.A.gait && paintFrozenSlot !== "A") slots.A.gait.update(t);
+  if (slots.B.gait && paintFrozenSlot !== "B") slots.B.gait.update(t);
   controls.update();
   renderer.render(scene, camera);
 }

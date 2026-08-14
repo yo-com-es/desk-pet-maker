@@ -94,6 +94,27 @@ export class GaitEngine {
     this.speedMul = m;
   }
 
+  // Vuelve cada hueso mapeado a la rotación que tenía cuando se creó este
+  // GaitEngine (la pose de reposo original del modelo), y el grupo raíz a
+  // su posición/rotación base. La usa el modo pintura: mientras pintas, el
+  // raycast siempre revisa la malla en su pose de reposo (así construye el
+  // árbol de aceleración three-mesh-bvh, y así funciona el raycast normal
+  // de three.js contra un SkinnedMesh — nunca contra la pose ya animada).
+  // Si el personaje seguía caminando/respirando mientras pintabas, lo que
+  // veías en pantalla no coincidía con contra qué se probaba el clic, y el
+  // pincel terminaba pintando círculos en lugares que parecían al azar.
+  resetToRest() {
+    for (const role of ALL_ROLES) {
+      const entry = this.mapping[role];
+      const rest = this._restEuler.get(role);
+      if (entry && entry.bone && rest) entry.bone.rotation.copy(rest);
+    }
+    if (this.root) {
+      if (!this.positionLocked) this.root.position.y = this._baseY;
+      this.root.rotation.z = 0;
+    }
+  }
+
   // Duración de un ciclo completo para el estado actual — la usa el
   // exportador para hornear la animación en un .glb que se repita bien.
   getLoopDuration() {
