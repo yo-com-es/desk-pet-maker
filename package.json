@@ -2,6 +2,7 @@
   "name": "criadero-taller",
   "version": "1.0.0",
   "description": "Taller para personalizar y animar modelos 3D de OCs/personajes",
+  "author": "Criadero",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
@@ -17,6 +18,7 @@
   "build": {
     "appId": "com.criadero.taller",
     "productName": "Criadero Taller",
+    "publish": null,
     "directories": {
       "output": "release"
     },
